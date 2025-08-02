@@ -4,6 +4,8 @@
 
 A PowerShell script to directly launch the Dell iDRAC 6 (and similar older iDRACs) Virtual Console (KVM) without relying on Java Web Start (.jnlp) and handling common SSL certificate and Java compatibility issues.
 
+---
+
 ## Table of Contents
 
 - [Introduction](#introduction)
@@ -32,14 +34,18 @@ This PowerShell script directly addresses these problems by:
 * Ignoring SSL certificate validation during JAR downloads.
 * Explicitly launching `java.exe` with the correct arguments and JRE 7.
 
+---
+
 ## Features
 
-* **Interactive Prompts:** Guides the user to input the iDRAC IP address, username, and password.
-* **Secure Password Input:** Utilizes PowerShell's `Read-Host -AsSecureString` for secure password entry, preventing plain-text exposure in the console. (Note: Password is temporarily converted to plain-text for Java application arguments).
-* **Automated JAR Download:** Automatically fetches the necessary KVM JAR files (`avctKVM.jar`, `avctKVMIOWin64.jar`, `avctVMWin64.jar`) from the iDRAC's web interface if they are not already present in the script's execution directory.
+* **Interactive Prompts:** Guides the user to input the iDRAC IP address, username, and password. The script now saves your Java and base directory paths to a `iDRAC_config.json` file after the first run.
+* **Password Handling:** The script uses `Read-Host` for password entry, which is the most reliable way for `Start-Process` to pass the value to the Java application.
+* **Automated JAR Download:** Automatically fetches the necessary KVM JAR files from the iDRAC's web interface if they are not already present in the script's designated folder.
+* **Native Library Extraction:** It handles the complex process of downloading the native library JARs, extracting the `.dll` files, and placing them in a `lib` sub-directory for the Java application to use.
 * **Robust SSL Bypass:** Employs the `-SkipCertificateCheck` parameter (for PowerShell 7+) on `Invoke-WebRequest` to reliably download files from iDRACs with invalid SSL certificates.
-* **Direct Java Execution:** Directly invokes the `java.exe` executable with a precisely constructed command-line string, eliminating `.jnlp` dependency and ensuring correct argument parsing.
-* **Local Persistence:** Stores downloaded JAR files in a `lib` subdirectory within the script's folder for quick re-use on subsequent launches.
+* **One-Time Manual Security Step:** To address Java's strict security policies, the script provides clear, step-by-step instructions for a one-time manual change to your `java.security` file. A pause is included to give you time to complete this step. The script remembers that this has been done so you won't be prompted again.
+
+---
 
 ## Requirements
 
@@ -54,46 +60,48 @@ This PowerShell script directly addresses these problems by:
 * **JRE 7 (JRE 1.7.0_XX) - Absolutely Critical!**
     * **Older iDRACs (like iDRAC 6) are ONLY compatible with JRE 7.** Newer Java versions (JRE 8, 11, 17, etc.) will **NOT** work and will result in errors like "class not found" or security exceptions because they lack the necessary deprecated protocols and APIs.
     * **Obtaining JRE 7:** Oracle no longer provides direct public downloads for JRE 7 without an Oracle account and acceptance of specific license terms. You may need to search for archived JRE 7 installers from a trusted source.
-    * **Installation Path:** By default, the script expects `java.exe` to be located at `C:\Program Files\Java\jre7\bin\java.exe`. **You MUST verify and adjust the `$JavaPath` variable in the script if your JRE 7 installation is in a different location.**
+    * **Installation Path:** The script will prompt you for the path to your JRE 7 installation on the first run and save it to the `iDRAC_config.json` file for future use.
+
+---
 
 ## How to Use
 
-1.  **Download the Script:**
-    * Clone this GitHub repository or simply copy the `Launch-iDRAC-KVM.ps1` script content into a new `.ps1` file.
+1.  **Save the Script:**
+    * Clone this GitHub repository or simply copy the script content into a new `.ps1` file.
     * Save the file in a dedicated folder on your local machine (e.g., `C:\iDRAC_Launcher\`). This folder will also serve as the storage location for the downloaded iDRAC JAR files.
 
-2.  **Install JRE 7 (if you haven't already):**
-    * Install JRE 7 on your system.
-    * **Crucially, verify the path to `java.exe` within your JRE 7 installation.** It's usually `C:\Program Files\Java\jre1.7.0_XX\bin\java.exe` or `C:\Program Files (x86)\Java\jre1.7.0_XX\bin\java.exe`.
-    * **Update `$JavaPath` in the script:** If your `java.exe` path is different from the default specified in the script, open the `.ps1` file in a text editor (like VS Code or Notepad) and update the `$JavaPath` variable accordingly.
-
-3.  **Run the Script:**
-    * Open a PowerShell 7 console.
+2.  **Run the Script:**
+    * Open a PowerShell console.
     * Navigate to the directory where you saved the script using `cd C:\path\to\your\script`.
     * Execute the script by typing:
-        ```powershell
-        .\Launch-iDRAC-KVM.ps1
-        ```
+      ```powershell
+      .\iDrac_KVM_Launcher.ps1
+      ```
     * Press `Enter`.
 
-4.  **Follow the Prompts:**
-    * The script will prompt you for the iDRAC IP address, username, and password. Enter the correct credentials for your iDRAC.
+3.  **Follow the Prompts:**
+    * **First Run:** The script will first prompt you for the path to your JRE 7 installation and a base directory for its files. It will then display a set of instructions for a **one-time manual change** to your `java.security` file. You must perform this step. The script will pause and wait for you to press Enter before continuing.
+    * **All Runs:** The script will then prompt you for the iDRAC IP address, username, and password. Enter the correct credentials for your iDRAC.
 
-5.  **Enjoy the KVM Console!**
+4.  **Enjoy the KVM Console!**
     * The script will attempt to download the necessary JAR files (if not present) and then launch the Java Virtual Console.
+
+---
 
 ## Script Details & Arguments
 
 The script works by directly invoking `java.exe` with a specific set of arguments that the iDRAC KVM applet expects. Here's a breakdown of the key arguments:
 
 * `-cp <path_to_avctKVM.jar>`: Specifies the classpath, telling Java where to find the main KVM application JAR.
-* `-Djava.library.path=<path_to_lib_folder>`: Points Java to the directory containing the native (OS-specific) libraries for keyboard and mouse support (`avctKVMIOWin64.jar`, `avctVMWin64.jar`).
+* `-Djava.library.path=<path_to_lib_folder>`: Points Java to the directory containing the native (OS-specific) libraries for keyboard and mouse support.
 * `com.avocent.idrac.kvm.Main`: This is the full class name of the main entry point for the KVM application.
 * `ip=<iDRAC_IP>`: The IP address of the iDRAC.
 * `user=<username>`: Your iDRAC login username.
 * `passwd=<password>`: Your iDRAC login password.
 * `kmport=5900`, `vport=5900`, `apcp=1`, `version=2`, `vmprivilege=true`: Standard parameters passed by the iDRAC.
 * `helpurl`, `title`: Additional informational parameters for the KVM viewer.
+
+---
 
 ## Troubleshooting
 
@@ -107,9 +115,9 @@ The script works by directly invoking `java.exe` with a specific set of argument
 * **`Error: Could not find or load main class C:\path\to\your\lib` (or similar path/JAR name)**
     * **Cause:** The Java Virtual Machine (`java.exe`) was launched, but it could not find or correctly load the `avctKVM.jar` file or its required main class (`com.avocent.idrac.kvm.Main`). This almost always means the JAR files were not downloaded correctly or are corrupted.
     * **Solution:**
-        1.  **Verify Downloads:** Check the script's directory and its `lib` subfolder. Confirm that `avctKVM.jar`, `avctKVMIOWin64.jar`, and `avctVMWin64.jar` exist and have non-zero, reasonable file sizes (e.g., `avctKVM.jar` is typically ~1MB). If they are missing or 0KB, the download failed.
+        1.  **Verify Downloads:** Check the script's directory and its `lib` subfolder. Confirm that `avctKVM.jar`, `avctKVMIOWin32.jar`, and `avctVMWin32.jar` exist and have non-zero, reasonable file sizes (e.g., `avctKVM.jar` is typically ~1MB). If they are missing or 0KB, the download failed.
         2.  **Retry Download:** Delete any existing JARs and re-run the script.
-        3.  **Correct Java Path:** Double-check that `$JavaPath` in the script points precisely to `java.exe` inside your JRE 7 `bin` folder (e.g., `C:\Program Files\Java\jre7\bin\java.exe`), **not** `javaws.exe`.
+        3.  **Correct Java Path:** The script will ask for this path on the first run. If you need to change it, simply delete the `iDRAC_config.json` file and re-run the script to enter the correct path.
 
 * **`Invalid URI: The hostname could not be parsed.`**
     * **Cause:** This very unusual error indicates that PowerShell was unable to correctly construct the download URL, often due to invisible characters or a unique string interpolation issue in the user's environment.
@@ -125,9 +133,13 @@ The script works by directly invoking `java.exe` with a specific set of argument
 * **Virtual Media (DVD/USB redirection) not working:**
     * This specific script focuses on launching the KVM. Virtual media functionality is usually accessed from within the opened KVM viewer window (look for a "Virtual Media" menu). The "Native Library" warning for keyboard/mouse should *not* directly affect Virtual Media functionality, as they rely on different underlying mechanisms.
 
+---
+
 ## Contributing
 
 Feel free to open issues or submit pull requests if you find bugs or have improvements!
+
+---
 
 ## License
 
